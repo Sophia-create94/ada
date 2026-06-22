@@ -1755,6 +1755,9 @@ img { max-width: 100%; display: block; }
     left: 0;
     right: auto;
   }
+  /* Drop the popover from the active field's bottom edge (set in JS) so it opens
+     directly under that field, like desktop, instead of below the whole 2x2. */
+  .search-popover { top: var(--pop-top, calc(100% + 10px)); }
 }
 @media (min-width: 701px) and (max-width: 920px) {
   .container, .hero, .features-section, .how, .footer{
@@ -1841,7 +1844,9 @@ img { max-width: 100%; display: block; }
   .ai-actions { order: 2; margin-left: auto; }
   /* Put "Ada searches" on its own line; partner names wrap below it. */
   .trust-strip strong { display: block; margin: 0 0 4px; }
-  .actions .login { display: none; }
+  /* Mobile: keep "Log in" visible next to "Start free"; drop the header
+     currency selector (it's still available in the footer) to make room. */
+  .currency-select--header { display: none; }
   .footer-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .footer-col a,
   .footer-col .footer-static { font-size: 13px; }

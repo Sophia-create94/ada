@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CITIES, type City } from '../../data/cities'
 import { STYLES } from '../../data/styles'
@@ -127,6 +127,10 @@ export default function SearchCard() {
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const whereInputRef = useRef<HTMLInputElement>(null)
+  const filterRowRef = useRef<HTMLDivElement>(null)
+  // On mobile the cells wrap to a 2x2 grid; this anchors the popover under the
+  // active field (consumed by CSS only at <=920px; desktop ignores it).
+  const [popTop, setPopTop] = useState<string>()
 
   useEffect(() => {
     setRecents(getRecents())
@@ -199,6 +203,22 @@ export default function SearchCard() {
     }
     const id = requestAnimationFrame(() => setPopOpen(true))
     return () => cancelAnimationFrame(id)
+  }, [activeFilter])
+
+  // Anchor the popover to the active field's bottom edge so on mobile (where the
+  // cells wrap to 2x2) it opens directly under that field, like desktop. The
+  // value is used only by the <=920px CSS rule; re-measure on resize.
+  useLayoutEffect(() => {
+    if (!activeFilter) return
+    const measure = () => {
+      const cell = filterRowRef.current?.querySelector<HTMLElement>(
+        `[data-filter="${activeFilter}"]`,
+      )
+      if (cell) setPopTop(`${cell.offsetTop + cell.offsetHeight + 10}px`)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
   }, [activeFilter])
 
   // Outside click + Escape close the popover.
@@ -425,7 +445,7 @@ export default function SearchCard() {
   return (
     <div className="search-card-wrap" ref={wrapRef}>
       <div className="search-card">
-        <div className="filter-row">
+        <div className="filter-row" ref={filterRowRef}>
           {/* WHERE */}
           <div
             className={
@@ -536,7 +556,11 @@ export default function SearchCard() {
           {/* Popover is anchored to the filter row so it opens just below it
               (over the advanced filters), not below the whole card. */}
           {activeFilter && (
-            <div className={'search-popover' + (popOpen ? ' is-open' : '')} data-type={activeFilter}>
+            <div
+              className={'search-popover' + (popOpen ? ' is-open' : '')}
+              data-type={activeFilter}
+              style={{ '--pop-top': popTop } as CSSProperties}
+            >
               {activeFilter === 'where' && (
                 <WherePopover
                   query={whereTyping ? whereInput : ''}

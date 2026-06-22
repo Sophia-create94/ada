@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Advanced, AmenityId, BookingTag, AccessId } from './types'
 import { STAYS } from '../../data/stays.data'
 import { CURRENCY_SYMBOL, priceInCurrency, convert } from '../../data/currency'
@@ -404,6 +404,21 @@ export default function AdvancedFilters({
     advanced.booking.length +
     advanced.access.length
 
+  const innerRef = useRef<HTMLDivElement>(null)
+  const [bodyHeight, setBodyHeight] = useState(0)
+  // Size the collapse/expand to the real content height so nothing is clipped
+  // on mobile, where the options stack into a tall column. Re-measure on any
+  // content or viewport change.
+  useLayoutEffect(() => {
+    const el = innerRef.current
+    if (!el) return
+    const update = () => setBodyHeight(el.scrollHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   return (
     <div className={'advanced-filters' + (expanded ? ' is-expanded' : '')}>
       <button
@@ -429,8 +444,8 @@ export default function AdvancedFilters({
           </svg>
         </span>
       </button>
-      <div className="adv-body">
-        <div className="adv-body-inner">
+      <div className="adv-body" style={{ maxHeight: expanded ? bodyHeight : 0 }}>
+        <div className="adv-body-inner" ref={innerRef}>
           <div className="adv-group">
             <div className="adv-group-label">Price per night</div>
             <PriceRange
