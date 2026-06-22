@@ -21,7 +21,10 @@ export const PLACEHOLDER_IMG =
       '</svg>',
   )
 
-// When ready, swap the body to: return `/assets/${stay.image}.jpg`
-export function getImageUrl(_stay: Stay): string {
-  return PLACEHOLDER_IMG
+// Real photos live in public/assets/style/<style>/<slug>.jpg, grouped by style under the
+// style/ folder for a cleaner overview (run scripts/fetch-images.mjs; scripts/reconcile-assets.mjs
+// re-files each image into its style's folder after a re-style). StayCard falls back to
+// PLACEHOLDER_IMG on error, so this is safe even before the images have been fetched.
+export function getImageUrl(stay: Stay): string {
+  return `/assets/style/${stay.style}/${stay.image}.jpg`
 }

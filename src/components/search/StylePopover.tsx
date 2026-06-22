@@ -18,7 +18,20 @@ export default function StylePopover({ style, onSelect }: Props) {
             type="button"
             onClick={() => onSelect(s.id)}
           >
-            <div className="style-thumb" dangerouslySetInnerHTML={{ __html: styleThumbSVG(s) }} />
+            <div className="style-thumb">
+              {/* SVG art is the fallback; the photo covers it once fetched. */}
+              <span className="style-thumb-art" dangerouslySetInnerHTML={{ __html: styleThumbSVG(s) }} />
+              <img
+                className="style-thumb-img"
+                src={`/assets/style/${s.asset}.jpg`}
+                alt=""
+                loading="eager"
+                decoding="async"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            </div>
             <div className="style-meta">
               <div className="style-name">{s.name}</div>
               <div className="style-tone">{s.tone}</div>

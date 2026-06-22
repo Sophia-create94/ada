@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import type { City } from '../../data/cities'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CITIES, type City } from '../../data/cities'
 import { STYLES } from '../../data/styles'
-import type { WhereSel, WhenSel, WhoSel, Advanced, FilterType, StyleId, AmenityId, BookingTag } from './types'
+import type { WhereSel, WhenSel, WhoSel, Advanced, FilterType, StyleId, AmenityId, BookingTag, AccessId } from './types'
 import { toISO, fmtShort, formatDateRange } from './dateUtils'
 import WherePopover, { buildWhereItems } from './WherePopover'
 import WhenPopover from './WhenPopover'
@@ -11,6 +11,19 @@ import StylePopover from './StylePopover'
 import AdvancedFilters, { type SegKey } from './AdvancedFilters'
 
 const RECENT_WHERE_KEY = 'ada_recent_where_v1'
+const preloadedStyleImages = new Set<string>()
+
+function preloadStyleImages() {
+  STYLES.forEach((s) => {
+    const src = `/assets/style/${s.asset}.jpg`
+    if (preloadedStyleImages.has(src)) return
+    preloadedStyleImages.add(src)
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = src
+    img.decode().catch(() => undefined)
+  })
+}
 
 function getRecents(): City[] {
   try {
@@ -20,27 +33,94 @@ function getRecents(): City[] {
   }
 }
 
+// Rebuild the search-card state from URL params, so "Adjust your search" returns
+// the user to the homepage with every filter still set rather than blank.
+function parseInitial(sp: URLSearchParams) {
+  const num = (k: string) => {
+    const v = sp.get(k)
+    if (v == null) return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+
+  const w = sp.get('where')
+  let where: WhereSel = null
+  let whereInput = ''
+  if (w === 'flexible') {
+    where = { name: "I'm flexible", country: null, flexible: true }
+    whereInput = "I'm flexible"
+  } else if (w) {
+    const city = CITIES.find((c) => c.name === w)
+    where = city ? { name: city.name, country: city.country } : { name: w, country: '' }
+    whereInput = city ? `${city.name}, ${city.country}` : w
+  }
+
+  const ci = sp.get('checkin')
+  const co = sp.get('checkout')
+  const when: WhenSel = {
+    start: ci ? new Date(ci + 'T00:00:00') : null,
+    end: co ? new Date(co + 'T00:00:00') : null,
+  }
+
+  const guests = num('guests') ?? 0
+  const who: WhoSel = { adults: guests, children: 0, infants: num('infants') ?? 0, pets: num('pets') ?? 0 }
+
+  const s = sp.get('style')
+  const style: StyleId | null = s && STYLES.some((x) => x.id === s) ? (s as StyleId) : null
+
+  const advanced: Advanced = {
+    minPrice: num('priceMin'),
+    maxPrice: num('price'),
+    wifiSpeed: sp.get('wifi') || 'any',
+    minReviews: sp.get('reviews') || 'any',
+    minRating: sp.get('rating') || 'any',
+    amenities: (sp.get('amenities')?.split(',').filter(Boolean) ?? []) as AmenityId[],
+    booking: (sp.get('booking')?.split(',').filter(Boolean) ?? []) as BookingTag[],
+    access: (sp.get('access')?.split(',').filter(Boolean) ?? []) as AccessId[],
+  }
+  const advExpanded = ['priceMin', 'price', 'wifi', 'reviews', 'rating', 'amenities', 'booking', 'access'].some(
+    (k) => sp.get(k),
+  )
+
+  return {
+    where,
+    whereInput,
+    when,
+    who,
+    style,
+    advanced,
+    advExpanded,
+    calendarView: ci ? new Date(ci + 'T00:00:00') : new Date(),
+  }
+}
+
 export default function SearchCard() {
   const navigate = useNavigate()
-
-  const [where, setWhere] = useState<WhereSel>(null)
-  const [when, setWhen] = useState<WhenSel>({ start: null, end: null })
-  const [who, setWho] = useState<WhoSel>({ adults: 0, children: 0, infants: 0, pets: 0 })
-  const [style, setStyle] = useState<StyleId | null>(null)
-  const [advanced, setAdvanced] = useState<Advanced>({
-    wifiSpeed: 'any',
-    minReviews: 'any',
-    minRating: 'any',
-    amenities: [],
-    booking: [],
+  const [searchParams] = useSearchParams()
+  // Hydrate the filters once from the URL when coming back from a filter search,
+  // so going back to Ada keeps what was selected. A chat/mood search restores the
+  // chat box instead, and a style-card click (from=styles) used the "By style"
+  // cards — not the search box — so neither should pre-fill the filter pills.
+  const [initial] = useState(() => {
+    const via = searchParams.get('via')
+    const fromStyleCard = searchParams.get('from') === 'styles'
+    const hydrate = (via == null || via === 'filters') && !fromStyleCard
+    return parseInitial(hydrate ? searchParams : new URLSearchParams())
   })
+
+  const [where, setWhere] = useState<WhereSel>(initial.where)
+  const [when, setWhen] = useState<WhenSel>(initial.when)
+  const [who, setWho] = useState<WhoSel>(initial.who)
+  const [style, setStyle] = useState<StyleId | null>(initial.style)
+  const [advanced, setAdvanced] = useState<Advanced>(initial.advanced)
 
   const [activeFilter, setActiveFilter] = useState<FilterType | null>(null)
   const [popOpen, setPopOpen] = useState(false)
-  const [calendarView, setCalendarView] = useState<Date>(() => new Date())
+  const [advExpanded, setAdvExpanded] = useState(initial.advExpanded)
+  const [calendarView, setCalendarView] = useState<Date>(initial.calendarView)
 
   // WHERE input + keyboard state
-  const [whereInput, setWhereInput] = useState('')
+  const [whereInput, setWhereInput] = useState(initial.whereInput)
   const [whereTyping, setWhereTyping] = useState(false)
   const [whereHighlight, setWhereHighlight] = useState(-1)
   const [recents, setRecents] = useState<City[]>([])
@@ -50,10 +130,28 @@ export default function SearchCard() {
 
   useEffect(() => {
     setRecents(getRecents())
+    preloadStyleImages()
+  }, [])
+
+  // Measure the WHO modal's content height (rendered into a hidden box) so the
+  // WHERE list can be capped to the exact same height — the two popovers then
+  // open at an identical height. Re-measure once web fonts settle.
+  const whoMeasureRef = useRef<HTMLDivElement>(null)
+  const [whoListHeight, setWhoListHeight] = useState<number>()
+  useEffect(() => {
+    const measure = () => {
+      const h = whoMeasureRef.current?.offsetHeight
+      if (h) setWhoListHeight(h)
+    }
+    measure()
+    document.fonts?.ready.then(measure)
   }, [])
 
   /* ---- popover open/close ---- */
   function openFilter(type: FilterType) {
+    // Collapse Advanced filters so the popover opens right beside the field
+    // (not far below the expanded panel).
+    setAdvExpanded(false)
     if (activeFilter === type) {
       if (type === 'where') whereInputRef.current?.focus()
       else closeFilter()
@@ -153,6 +251,18 @@ export default function SearchCard() {
     if (activeFilter !== 'where') openFilter('where')
     requestAnimationFrame(() => whereInputRef.current?.focus())
   }
+  function clearWhen() {
+    setWhen({ start: null, end: null })
+    if (activeFilter !== 'when') openFilter('when')
+  }
+  function clearWho() {
+    setWho({ adults: 0, children: 0, infants: 0, pets: 0 })
+    if (activeFilter !== 'who') openFilter('who')
+  }
+  function clearStyle() {
+    setStyle(null)
+    if (activeFilter !== 'style') openFilter('style')
+  }
   function onWhereKeyDown(e: React.KeyboardEvent) {
     const items = buildWhereItems(whereTyping ? whereInput : '', recents)
     if (e.key === 'ArrowDown') {
@@ -204,6 +314,9 @@ export default function SearchCard() {
   }
 
   /* ---- ADVANCED handlers ---- */
+  function setPrice(key: 'minPrice' | 'maxPrice', value: number | null) {
+    setAdvanced((p) => ({ ...p, [key]: value }))
+  }
   function setSegment(key: SegKey, value: string) {
     setAdvanced((p) => ({ ...p, [key]: value }))
   }
@@ -223,8 +336,25 @@ export default function SearchCard() {
         : [...p.booking, value],
     }))
   }
+  function toggleAccess(value: AccessId) {
+    setAdvanced((p) => ({
+      ...p,
+      access: p.access.includes(value)
+        ? p.access.filter((a) => a !== value)
+        : [...p.access, value],
+    }))
+  }
   function clearAdvanced() {
-    setAdvanced({ wifiSpeed: 'any', minReviews: 'any', minRating: 'any', amenities: [], booking: [] })
+    setAdvanced({
+      minPrice: null,
+      maxPrice: null,
+      wifiSpeed: 'any',
+      minReviews: 'any',
+      minRating: 'any',
+      amenities: [],
+      booking: [],
+      access: [],
+    })
   }
 
   /* ---- displays ---- */
@@ -258,11 +388,19 @@ export default function SearchCard() {
     if (who.infants) p.set('infants', String(who.infants))
     if (who.pets) p.set('pets', String(who.pets))
     if (style) p.set('style', style)
+    let minPrice = advanced.minPrice
+    let maxPrice = advanced.maxPrice
+    if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+      ;[minPrice, maxPrice] = [maxPrice, minPrice]
+    }
+    if (minPrice != null) p.set('priceMin', String(minPrice))
+    if (maxPrice != null) p.set('price', String(maxPrice))
     if (advanced.wifiSpeed !== 'any') p.set('wifi', advanced.wifiSpeed)
     if (advanced.minReviews !== 'any') p.set('reviews', advanced.minReviews)
     if (advanced.minRating !== 'any') p.set('rating', advanced.minRating)
     if (advanced.amenities.length) p.set('amenities', advanced.amenities.join(','))
     if (advanced.booking.length) p.set('booking', advanced.booking.join(','))
+    if (advanced.access.length) p.set('access', advanced.access.join(','))
     navigate('/results?' + p.toString())
   }
 
@@ -345,7 +483,7 @@ export default function SearchCard() {
               <div className="filter-label">WHEN</div>
               <div className={'filter-value' + (whenHasValue || when.start ? ' is-set' : '')}>{whenDisplay}</div>
             </div>
-            <ClearBtn onClick={() => setWhen({ start: null, end: null })} label="Clear dates" />
+            <ClearBtn onClick={clearWhen} label="Clear dates" />
           </div>
 
           {/* WHO */}
@@ -365,7 +503,7 @@ export default function SearchCard() {
               <div className="filter-label">WHO</div>
               <div className={'filter-value' + (!whoIsDefault ? ' is-set' : '')}>{whoDisplay}</div>
             </div>
-            <ClearBtn onClick={() => setWho({ adults: 0, children: 0, infants: 0, pets: 0 })} label="Clear guests" />
+            <ClearBtn onClick={clearWho} label="Clear guests" />
           </div>
 
           {/* STYLE */}
@@ -385,7 +523,7 @@ export default function SearchCard() {
               <div className="filter-label">STYLE</div>
               <div className={'filter-value' + (style ? ' is-set' : '')}>{styleName}</div>
             </div>
-            <ClearBtn onClick={() => setStyle(null)} label="Clear aesthetic" />
+            <ClearBtn onClick={clearStyle} label="Clear aesthetic" />
           </div>
 
           <button className="filter-search-btn" type="button" aria-label="Search" onClick={search}>
@@ -394,51 +532,75 @@ export default function SearchCard() {
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
           </button>
+
+          {/* Popover is anchored to the filter row so it opens just below it
+              (over the advanced filters), not below the whole card. */}
+          {activeFilter && (
+            <div className={'search-popover' + (popOpen ? ' is-open' : '')} data-type={activeFilter}>
+              {activeFilter === 'where' && (
+                <WherePopover
+                  query={whereTyping ? whereInput : ''}
+                  recents={recents}
+                  highlight={whereHighlight}
+                  onSelectFlexible={commitFlexible}
+                  onSelectCity={commitCity}
+                  onHover={setWhereHighlight}
+                  listMaxHeight={whoListHeight}
+                />
+              )}
+              {activeFilter === 'when' && (
+                <WhenPopover
+                  when={when}
+                  calendarView={calendarView}
+                  onPrev={() => setCalendarView((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                  onNext={() => setCalendarView((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                  onSelectDate={selectDate}
+                  onClear={clearWhen}
+                />
+              )}
+              {activeFilter === 'who' && <WhoPopover who={who} onStep={stepWho} />}
+              {activeFilter === 'style' && (
+                <StylePopover
+                  style={style}
+                  onSelect={(id) => {
+                    setStyle(id)
+                    closeFilter()
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         <AdvancedFilters
           advanced={advanced}
+          histogramCity={where && !where.flexible ? where.name : null}
+          expanded={advExpanded}
+          onToggleExpanded={() => setAdvExpanded((v) => !v)}
+          onSetPrice={setPrice}
           onSetSegment={setSegment}
           onToggleAmenity={toggleAmenity}
           onToggleBooking={toggleBooking}
+          onToggleAccess={toggleAccess}
           onClear={clearAdvanced}
         />
       </div>
 
-      {activeFilter && (
-        <div className={'search-popover' + (popOpen ? ' is-open' : '')} data-type={activeFilter}>
-          {activeFilter === 'where' && (
-            <WherePopover
-              query={whereTyping ? whereInput : ''}
-              recents={recents}
-              highlight={whereHighlight}
-              onSelectFlexible={commitFlexible}
-              onSelectCity={commitCity}
-              onHover={setWhereHighlight}
-            />
-          )}
-          {activeFilter === 'when' && (
-            <WhenPopover
-              when={when}
-              calendarView={calendarView}
-              onPrev={() => setCalendarView((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-              onNext={() => setCalendarView((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-              onSelectDate={selectDate}
-              onClear={() => setWhen({ start: null, end: null })}
-            />
-          )}
-          {activeFilter === 'who' && <WhoPopover who={who} onStep={stepWho} />}
-          {activeFilter === 'style' && (
-            <StylePopover
-              style={style}
-              onSelect={(id) => {
-                setStyle(id)
-                closeFilter()
-              }}
-            />
-          )}
-        </div>
-      )}
+      {/* Off-screen WHO content, measured to size the WHERE list to match. */}
+      <div
+        ref={whoMeasureRef}
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: -99999,
+          top: 0,
+          width: 382,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+        }}
+      >
+        <WhoPopover who={{ adults: 1, children: 0, infants: 0, pets: 0 }} onStep={() => {}} />
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
-import type { StyleId } from './types'
+import type { StyleId, AmenityId } from './types'
 import { CITIES } from './cities'
-import { parsePrompt } from './styles'
+import { parsePrompt, STYLE_LABELS } from './styles'
 import { STAYS } from './stays.data'
 import { parseDates } from './parseDates'
 
@@ -8,13 +8,38 @@ export type ParsedChat = {
   where?: string // a covered city name
   notCovered?: string // a real city Ada recognises but doesn't cover yet
   suggestion?: { name: string; covered: boolean } // a likely-misspelled city
+  styleSuggestion?: { id: StyleId; label: string } // a likely-misspelled style ("svandinavian")
   area?: string // a neighbourhood / borough within the city (e.g. "Brooklyn")
   checkin?: string // ISO date
   checkout?: string // ISO date
   style?: StyleId
   guests?: number
   maxPrice?: number // nightly budget cap
+  wifi?: string // min Wi-Fi tier, e.g. '100' | '250'
+  amenities?: AmenityId[] // e.g. ['pool']
+  tags?: string[] // setting/vibe, e.g. ['beach']
 }
+
+const AMENITY_KEYWORDS: [RegExp, AmenityId][] = [
+  [/\bpools?\b/, 'pool'],
+  [/\bkitchens?\b/, 'kitchen'],
+  [/\bstoves?\b/, 'stove'],
+  [/\bparking\b/, 'parking'],
+  [/\bgyms?\b/, 'gym'],
+  [/\b(?:workspace|desk|office|co-?working)\b/, 'workspace'],
+  [/\b(?:washer|washing machine|laundry)\b/, 'washer'],
+  [/(?<!hair )\bdryer\b|\btumble dryer\b/, 'dryer'],
+  [/\bbalcon(?:y|ies)\b/, 'balcony'],
+  [/\b(?:air[- ]?conditioning|aircon|a\/c|ac)\b/, 'ac'],
+  [/\bheating\b/, 'heating'],
+  [/\b(?:tv|television)\b/, 'tv'],
+  [/\b(?:hair ?dryer)\b/, 'hairdryer'],
+  [/\biron\b/, 'iron'],
+]
+
+// Coastal language → the "beach" setting tag.
+const BEACH_RE =
+  /\b(?:beach(?:front)?|ocean(?:front)?|sea(?:side|front|shore)?|coast(?:al|line)?|shore|surf(?:ing)?|sand(?:y)?|waterfront)\b/
 
 // Neighbourhood / area tokens per city, derived from the stay data's `loc`
 // fields (minus the city name itself). Lets "only Brooklyn" filter to Brooklyn.
@@ -31,7 +56,8 @@ for (const s of STAYS) {
 // Names that collide with common English words (Nice, Split, Bath…) are omitted
 // to avoid false positives.
 const UNCOVERED_CITIES = [
-  'London', 'Rome', 'Berlin', 'Madrid', 'Amsterdam', 'Budapest', 'Prague', 'Vienna',
+  'Kyoto', 'Lisbon', 'Marrakech', 'Cape Town', 'Panama City', 'Heidelberg', 'Medellin',
+  'London', 'Rome', 'Madrid', 'Amsterdam', 'Budapest', 'Prague', 'Vienna',
   'Milan', 'Venice', 'Naples', 'Athens', 'Istanbul', 'Dublin', 'Edinburgh', 'Porto',
   'Seville', 'Valencia', 'Munich', 'Hamburg', 'Frankfurt', 'Cologne', 'Copenhagen',
   'Stockholm', 'Oslo', 'Helsinki', 'Zurich', 'Geneva', 'Brussels', 'Bruges', 'Warsaw',
@@ -42,7 +68,7 @@ const UNCOVERED_CITIES = [
   'Denver', 'Austin', 'Nashville', 'New Orleans', 'Las Vegas', 'San Diego', 'Washington',
   'Philadelphia', 'Atlanta', 'Honolulu', 'Toronto', 'Vancouver', 'Montreal', 'Quebec',
   'Rio de Janeiro', 'Sao Paulo', 'Buenos Aires', 'Lima', 'Cusco', 'Santiago', 'Bogota',
-  'Cartagena', 'Medellin', 'Havana', 'Cancun', 'Oaxaca', 'Guadalajara', 'Quito',
+  'Cartagena', 'Havana', 'Cancun', 'Oaxaca', 'Guadalajara', 'Quito',
   'Bangkok', 'Chiang Mai', 'Phuket', 'Singapore', 'Hong Kong', 'Seoul', 'Beijing',
   'Shanghai', 'Osaka', 'Taipei', 'Hanoi', 'Jakarta', 'Kuala Lumpur', 'Manila', 'Delhi',
   'Mumbai', 'Jaipur', 'Goa', 'Kathmandu', 'Colombo', 'Dubai', 'Abu Dhabi', 'Doha',
@@ -66,8 +92,9 @@ const FUZZY_STOPWORDS = new Set([
   'below', 'less', 'than', 'about', 'around', 'over', 'max', 'maximum', 'budget', 'cheap',
   'cheaper', 'price', 'with', 'without', 'near', 'from', 'some', 'somewhere', 'place', 'places',
   'stay', 'stays', 'trip', 'need', 'want', 'looking', 'find', 'show', 'something', 'anywhere',
-  'modern', 'contemporary', 'clean', 'scandi', 'scandinavian', 'nordic', 'cabin', 'wood',
-  'vintage', 'retro', 'pastel', 'deco', 'farmhouse', 'rustic', 'country', 'stone', 'tuscan',
+  'modern', 'contemporary', 'minimalist', 'minimal', 'uncluttered', 'clean', 'scandi', 'scandinavian', 'nordic', 'cabin', 'wood',
+  'traditional', 'classic', 'period', 'retro', 'pastel', 'deco', 'farmhouse', 'rustic', 'country', 'stone', 'tuscan',
+  'industrial', 'loft', 'warehouse', 'factory', 'concrete', 'steel', 'brick',
   'ornate', 'mosaic', 'luxury', 'premium', 'villa', 'beach', 'ocean', 'mountain', 'mountains',
   'city', 'downtown', 'central', 'cozy', 'quiet', 'dreamy', 'sunny', 'warm', 'cold', 'snow',
   'romantic', 'family', 'friends', 'solo', 'couple', 'weekend', 'holiday', 'vacation', 'summer',
@@ -75,20 +102,27 @@ const FUZZY_STOPWORDS = new Set([
   'september', 'october', 'november', 'december', 'pool', 'wifi', 'apartment', 'house',
 ])
 
-// Levenshtein edit distance, bailing out once it exceeds `max`.
+// Damerau–Levenshtein (optimal string alignment) edit distance — counts an
+// adjacent transposition ("toyko"↔"tokyo", "Barcleona"↔"Barcelona") as a single
+// edit, not two — bailing out once it exceeds `max`.
 function editDistance(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1
+  let prevPrev: number[] = new Array(b.length + 1).fill(0)
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
   for (let i = 1; i <= a.length; i++) {
     const curr = [i]
     let best = i
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      const v = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+      let v = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        v = Math.min(v, prevPrev[j - 2] + cost) // adjacent transposition
+      }
       curr.push(v)
       if (v < best) best = v
     }
     if (best > max) return max + 1
+    prevPrev = prev
     prev = curr
   }
   return prev[b.length]
@@ -129,6 +163,33 @@ function closestCity(lower: string): { name: string; covered: boolean } | null {
     }
   }
   return best ? { name: best.name, covered: best.covered } : null
+}
+
+// Canonical style words to catch typos of (e.g. "svandinavian" → scandinavian).
+// Only used as a fallback when no exact style keyword matched.
+const STYLE_TARGETS: [string, StyleId][] = [
+  ['scandinavian', 'scandinavian'],
+  ['minimalist', 'minimalist'],
+  ['traditional', 'traditional'],
+  ['industrial', 'industrial'],
+  ['japandi', 'japandi'],
+  ['modern', 'modern'],
+]
+
+// Closest style word to any token in the text — a likely typo. Returns null
+// unless a near-miss (edit distance within a length-scaled threshold) is found.
+function closestStyle(lower: string): { id: StyleId; label: string } | null {
+  const words = lower.replace(/[^a-z\s]/g, ' ').split(/\s+/).filter((w) => w.length >= 5)
+  let best: { id: StyleId; dist: number } | null = null
+  for (const w of words) {
+    for (const [name, id] of STYLE_TARGETS) {
+      if (Math.abs(w.length - name.length) > 2) continue
+      const thr = name.length <= 7 ? 1 : 2 // shorter names need a tighter bar
+      const d = editDistance(w, name, thr)
+      if (d > 0 && d <= thr && (!best || d < best.dist)) best = { id, dist: d }
+    }
+  }
+  return best ? { id: best.id, label: STYLE_LABELS[best.id] } : null
 }
 
 // Lightweight natural-language parser for the AI prompt box. Pulls out a known
@@ -184,6 +245,11 @@ export function parseChat(text: string): ParsedChat {
 
   const style = parsePrompt(text)
   if (style) out.style = style
+  else {
+    // No exact style matched — offer a "did you mean…" for a likely style typo.
+    const styleGuess = closestStyle(lower)
+    if (styleGuess) out.styleSuggestion = styleGuess
+  }
 
   // Guest count — "2 people", "4 guests", "3 adults".
   const m = lower.match(/(\d+)\s*(?:people|guests?|adults?|persons?|pax)\b/)
@@ -204,6 +270,23 @@ export function parseChat(text: string): ParsedChat {
     const p = parseInt(priceMatch[1], 10)
     if (p > 0) out.maxPrice = p
   }
+
+  // Amenities — "with a pool", "hot tub", "parking"…
+  const amenities: AmenityId[] = []
+  for (const [re, id] of AMENITY_KEYWORDS) if (re.test(lower)) amenities.push(id)
+  if (amenities.length) out.amenities = amenities
+
+  // Setting — "beach", "ocean", "by the sea" → only coastal stays.
+  if (BEACH_RE.test(lower)) out.tags = ['beach']
+
+  // Wi-Fi — "fast wifi", "to work", "digital nomad" imply a connection floor.
+  if (/\b(?:fibre|fiber|gigabit|fastest|blazing(?:[- ]fast)?)\b/.test(lower)) out.wifi = '250'
+  else if (
+    /\b(?:fast|strong|reliable|good|high[- ]?speed|great)\s+(?:wi-?fi|internet|connection)\b/.test(lower) ||
+    /\b(?:wi-?fi|internet)\s+to work\b/.test(lower) ||
+    /\b(?:digital nomad|remote work|work from home|workcation|work-friendly)\b/.test(lower)
+  )
+    out.wifi = '100'
 
   return out
 }

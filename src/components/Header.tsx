@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
 import BrandMark from './BrandMark'
+import CurrencySelect from './CurrencySelect'
 
 // Shared header — identical on the landing and results pages.
 export default function Header() {
@@ -8,18 +8,16 @@ export default function Header() {
       <div className="container header-inner">
         <BrandMark />
         <nav className="nav">
-          <Link to="/" className="active">
-            Plan a trip
-          </Link>
           <a href="/#how-it-works">How Ada works</a>
         </nav>
         <div className="actions">
-          <a href="#" className="login">
+          <CurrencySelect className="currency-select--header" />
+          <span className="login">
             Log in
-          </a>
-          <a href="#" className="cta-primary">
+          </span>
+          <span className="cta-primary cta-static">
             Start free
-          </a>
+          </span>
         </div>
       </div>
     </header>

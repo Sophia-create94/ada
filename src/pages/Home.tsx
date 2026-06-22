@@ -1,10 +1,57 @@
+import { Fragment, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import SearchCard from '../components/search/SearchCard'
 import ChatCard from '../components/ChatCard'
 import Moods from '../components/Moods'
+import HorizontalScrollbar from '../components/HorizontalScrollbar'
+import HowItWorks from '../components/HowItWorks'
+import WhyAda from '../components/WhyAda'
+import { STYLES } from '../data/styles'
+
+const STYLE_DESCRIPTIONS = {
+  modern:
+    'For stays that feel current, open, and edited. Think clean lines, practical furniture, neutral tones, and rooms where every detail has a purpose.',
+  scandinavian:
+    'Bright, practical, and quietly cozy. Expect pale wood, soft neutrals, natural light, and furniture that feels easy to live with.',
+  traditional:
+    'Classic rooms with a sense of history. Look for layered textiles, framed art, moldings, vintage pieces, and details that feel collected over time.',
+  industrial:
+    'Loft energy with a raw edge. Exposed brick, steel, concrete, big windows, and open rooms give these stays an urban, lived-in character.',
+  japandi:
+    'A calm blend of Japanese restraint and Scandinavian warmth. Natural wood, low profiles, handmade textures, and breathing room keep it simple but soft.',
+  minimalist:
+    'For travelers who want visual quiet. Fewer objects, clear surfaces, neutral tones, and purposeful furniture make the stay feel calm and open.',
+} satisfies Record<(typeof STYLES)[number]['id'], string>
 
 export default function Home() {
+  const styleRowRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const row = styleRowRef.current
+    if (!row) return
+    row.scrollLeft = 0
+    row.dataset.scrollPos = 'start'
+    const update = () => {
+      const overflows = row.scrollWidth > row.clientWidth + 2
+      if (!overflows) {
+        row.dataset.scrollPos = 'start'
+        return
+      }
+      const atEnd = row.scrollLeft >= row.scrollWidth - row.clientWidth - 4
+      const atStart = row.scrollLeft <= 6
+      row.dataset.scrollPos = atEnd ? 'end' : atStart ? 'start' : 'middle'
+    }
+    row.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    update()
+    return () => {
+      row.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
   return (
     <>
       <Header />
@@ -14,9 +61,8 @@ export default function Home() {
         <section className="hero">
           <h1 className="hero-headline">Stays that match your taste.</h1>
           <p className="hero-subhead">
-            Use advanced filters or a single prompt — Ada's AI-powered search finds five stays you'd
-            actually book, not 100 to sift through. The more you use it, the better the
-            personalization gets.
+            Ada’s AI-powered search finds five stays you’d actually book — not 100 to sift through.
+            Start searching today with no account, or sign up for free to get personalized results.
           </p>
 
           <SearchCard />
@@ -28,151 +74,80 @@ export default function Home() {
           <ChatCard />
 
           <div className="trust-strip">
-            <strong>Ada searches</strong>
-            <span>Airbnb</span>
-            <span className="trust-strip-sep">·</span>
-            <span>Booking.com</span>
-            <span className="trust-strip-sep">·</span>
-            <span>Vrbo</span>
-            <span className="trust-strip-sep">·</span>
-            <span>Plum Guide</span>
-            <span className="trust-strip-sep">·</span>
-            <span>Tablet Hotels</span>
+            <strong>Ada searches</strong>{' '}
+            {[
+              { name: 'Airbnb', url: 'https://www.airbnb.com' },
+              { name: 'Booking.com', url: 'https://www.booking.com' },
+              { name: 'Vrbo', url: 'https://www.vrbo.com' },
+              { name: 'Plum Guide', url: 'https://www.plumguide.com' },
+              { name: 'Tablet Hotels', url: 'https://www.tablethotels.com' },
+            ].map((p, i) => (
+              <Fragment key={p.name}>
+                {i > 0 && <span className="trust-strip-sep"> · </span>}
+                <a href={p.url} target="_blank" rel="noopener noreferrer">
+                  {p.name}
+                </a>
+              </Fragment>
+            ))}
           </div>
         </section>
 
-        {/* MOODS */}
-        <Moods />
+        {/* BROWSE — by style or mood */}
+        <section className="browse">
+          <div className="browse-inner">
+            <div className="browse-head">
+              <div className="eyebrow">NOT SURE WHERE TO START?</div>
+              <h2 className="section-title">Browse by style or mood.</h2>
+              <p className="moods-subhead">
+                Pick a look you love or a mood you're after, and Ada finds five matching stays.
+              </p>
+            </div>
 
-        {/* FEATURES */}
-        <section className="features-section">
-          <div className="features-head">
-            <div className="eyebrow">WHAT MAKES ADA DIFFERENT</div>
-            <h2 className="section-title">Search less. Faster results.</h2>
-          </div>
-          <div className="features">
-            <div className="feature">
-              <div className="feature-icon">✦</div>
-              <div className="feature-title">Gets to know you</div>
-              <div className="feature-body">
-                Your first search, Ada matches by your filters. Save a place, skip another, make a
-                booking — and she starts learning your taste. By your fifth search, Ada already knows
-                what you'd skip.
+            <div className="browse-block" id="styles">
+              <h3 className="browse-block-title">By style</h3>
+              <div className="style-showcase-row" ref={styleRowRef} data-scroll-pos="start">
+              {STYLES.map((s) => (
+                <Link
+                  className="style-showcase-card"
+                  key={s.id}
+                  to={`/results?via=filters&style=${s.id}&from=styles`}
+                  aria-label={`Show ${s.name} stays`}
+                >
+                  <img
+                    className="style-showcase-img"
+                    src={`/assets/style/${s.asset}.jpg`}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className="style-showcase-copy">
+                    <h3>{s.name}</h3>
+                    <p className="style-showcase-tone">{s.tone}</p>
+                    <p>{STYLE_DESCRIPTIONS[s.id]}</p>
+                    <span className="style-showcase-cta">
+                      Search this style
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                      </svg>
+                    </span>
+                  </div>
+                </Link>
+              ))}
               </div>
+              <HorizontalScrollbar targetRef={styleRowRef} />
             </div>
-            <div className="feature">
-              <div className="feature-icon">◐</div>
-              <div className="feature-title">Reads between the photos</div>
-              <div className="feature-body">
-                Hosts put their best shots first. Ada is trained to catch what comes after — tired
-                interiors, misleading angles, rooms that don't quite match the description.
-              </div>
-            </div>
-            <div className="feature">
-              <div className="feature-icon">◊</div>
-              <div className="feature-title">Five picks, not a hundred</div>
-              <div className="feature-body">
-                Ada shows you a short list of stays that actually fit. No scrolling through pages of
-                results. Ask for more if you want to — most people don't need to.
-              </div>
-            </div>
+
+            <Moods />
           </div>
         </section>
+
+        {/* WHAT MAKES ADA DIFFERENT (tabs) */}
+        <WhyAda />
 
         {/* HOW */}
-        <section className="how" id="how-it-works">
-          <div className="container">
-            <div className="section-head">
-              <div className="eyebrow">HOW ADA WORKS</div>
-              <h2 className="section-title">Simple to start. Smarter every time.</h2>
-            </div>
-            <div className="how-grid">
-              <div className="how-step">
-                <div className="how-number">01</div>
-                <div className="how-step-title">Tell Ada what you're imagining</div>
-                <div className="how-step-body">
-                  Plain English. Mood, style, budget, constraints — speak the way you'd describe the
-                  trip to a friend, not the way you'd fight with filters.
-                </div>
-              </div>
-              <div className="how-step">
-                <div className="how-number">02</div>
-                <div className="how-step-title">She scans every platform at once</div>
-                <div className="how-step-body">
-                  Airbnb, Booking, Vrbo, Plum Guide and a dozen others. Ada weights them against your
-                  taste and surfaces the five most likely to land.
-                </div>
-              </div>
-              <div className="how-step">
-                <div className="how-number">03</div>
-                <div className="how-step-title">Book where it's listed</div>
-                <div className="how-step-body">
-                  Same price as the source platform — Ada doesn't markup, doesn't add fees. You're
-                  sent to Airbnb or Booking to complete the booking the way you already trust.
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <HowItWorks />
 
-        {/* PROOF */}
-        <section className="proof">
-          <div className="container">
-            <div className="section-head">
-              <div className="eyebrow">WHAT HAPPENS AFTER TRIP ONE</div>
-              <h2 className="section-title">This is what personalization looks like.</h2>
-            </div>
-            <div className="proof-grid">
-              <div className="proof-card">
-                <div className="proof-quote">
-                  I skipped two of Ada's first picks and saved one. By my third search she'd already
-                  stopped showing me the kind of places I'd skip. I didn't have to tell her anything —
-                  she just noticed.
-                </div>
-                <div className="proof-attrib">
-                  <div className="proof-avatar" style={{ background: '#7A8B6F' }}>
-                    SK
-                  </div>
-                  <div>
-                    <div className="proof-name">Sarah K.</div>
-                    <div className="proof-meta">Berlin · 4 trips with Ada</div>
-                  </div>
-                </div>
-              </div>
-              <div className="proof-card">
-                <div className="proof-quote">
-                  My fifth search felt nothing like my first. The first time I got solid options. The
-                  fifth time I got the exact place I would have spent three weeks looking for on my
-                  own.
-                </div>
-                <div className="proof-attrib">
-                  <div className="proof-avatar" style={{ background: '#5B7B8A' }}>
-                    MT
-                  </div>
-                  <div>
-                    <div className="proof-name">Marcus T.</div>
-                    <div className="proof-meta">Austin · 7 trips with Ada</div>
-                  </div>
-                </div>
-              </div>
-              <div className="proof-card">
-                <div className="proof-quote">
-                  I booked a place in Lisbon that I never would have found myself — not my usual
-                  style, but Ada had been watching what I save for months. She knew before I did.
-                </div>
-                <div className="proof-attrib">
-                  <div className="proof-avatar" style={{ background: '#D896B5' }}>
-                    LR
-                  </div>
-                  <div>
-                    <div className="proof-name">Lila R.</div>
-                    <div className="proof-meta">Mexico City · 11 trips with Ada</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
 
       {/* CTA */}
@@ -182,9 +157,9 @@ export default function Home() {
           <p className="cta-band-body">
             Ada finds five stays you'd actually book. Free to start, better every trip.
           </p>
-          <a href="#" className="cta-band-btn">
+          <span className="cta-band-btn cta-static">
             Create a free account
-          </a>
+          </span>
         </div>
       </section>
 

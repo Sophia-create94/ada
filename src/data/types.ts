@@ -5,24 +5,32 @@
 export type StyleId =
   | 'modern'
   | 'scandinavian'
-  | 'vintage'
-  | 'farmhouse'
-  | 'art-nouveau'
-  | 'modern-luxury'
+  | 'traditional'
+  | 'industrial'
+  | 'japandi'
+  | 'minimalist'
 
 export type AmenityId =
   | 'pool'
   | 'workspace'
   | 'washer'
+  | 'dryer'
   | 'kitchen'
+  | 'stove'
   | 'ac'
+  | 'heating'
   | 'parking'
-  | 'hottub'
-  | 'ev'
-  | 'garden'
+  | 'tv'
+  | 'hairdryer'
+  | 'iron'
+  | 'balcony'
   | 'gym'
 
-export type BookingTag = 'cancellation' | 'instant' | 'superhost'
+export type BookingTag = 'cancellation' | 'instant' | 'selfcheckin' | 'superhost' | 'petsallowed'
+
+export type AccessId = 'stepfree' | 'wideentrance' | 'stepfreeshower' | 'grabbars'
+
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'SEK'
 
 export type Stay = {
   id: string
@@ -39,6 +47,9 @@ export type Stay = {
   wifiSpeed: number // Mbps
   amenities: AmenityId[]
   booking: BookingTag[]
+  access?: AccessId[] // accessibility features
+  tags?: string[] // setting/vibe tags, e.g. 'beach'
+  moods?: string[] // mood-tile ids this stay fits, e.g. 'wintry'
   source: string
   sourceUrl: string
   why: string // one sentence — Ada's reason for this pick
@@ -58,13 +69,17 @@ export type ResultsParams = {
   guests?: number
   infants?: number
   pets?: number
-  maxPrice?: number // nightly price cap (chat: "under $200")
+  minPrice?: number // nightly price floor — canonical USD
+  maxPrice?: number // nightly price cap — canonical USD
   style?: StyleId
+  styleSuggest?: string // a likely-misspelled style id, for a "did you mean…" prompt
   wifi?: string // 'any' | '25' | '100' | '250'
   reviews?: string // 'any' | '10' | '50' | '100' | '500'
   rating?: string // 'any' | '4.0' | '4.5' | '4.8'
   amenities?: AmenityId[]
   booking?: BookingTag[]
+  access?: AccessId[] // accessibility features
+  tags?: string[] // setting/vibe tags, e.g. 'beach'
   q?: string
   mood?: string
 }

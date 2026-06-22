@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import CurrencySelect from './CurrencySelect'
+import BrandMark from './BrandMark'
 
 // Shared footer — identical on the landing and results pages.
 export default function Footer() {
@@ -6,40 +7,36 @@ export default function Footer() {
     <footer className="footer">
       <div className="footer-grid">
         <div className="footer-brand-col">
-          <Link to="/" className="brand">
-            <div className="brand-mark">a</div>
-            <div className="brand-name">ada</div>
-          </Link>
+          <BrandMark link={false} />
         </div>
         <div className="footer-col">
           <div className="footer-col-title">Product</div>
-          <Link to="/">Plan a trip</Link>
-          <a href="#">Style filters</a>
+          <span className="footer-static">Style filters</span>
           <a href="/#how-it-works">How Ada works</a>
-          <a href="#">Pricing</a>
+          <span className="footer-static">Pricing</span>
         </div>
         <div className="footer-col">
           <div className="footer-col-title">Discover</div>
-          <a href="#">Editor's picks</a>
-          <a href="#">Travel journal</a>
-          <a href="#">Trending stays</a>
-          <a href="#">Style guide</a>
+          <span className="footer-static">Editor's picks</span>
+          <span className="footer-static">Travel journal</span>
+          <span className="footer-static">Trending stays</span>
+          <span className="footer-static">Style guide</span>
         </div>
         <div className="footer-col">
           <div className="footer-col-title">Support</div>
-          <a href="#">Help center</a>
-          <a href="#">Contact</a>
-          <a href="#">Trust &amp; safety</a>
-          <a href="#">Booking partners</a>
+          <span className="footer-static">Help center</span>
+          <span className="footer-static">Contact</span>
+          <span className="footer-static">Trust &amp; safety</span>
+          <span className="footer-static">Booking partners</span>
         </div>
       </div>
       <div className="footer-bottom">
         <div>© 2026 Ada</div>
         <div className="footer-meta">
-          <a href="#">Privacy</a>
-          <a href="#">Terms</a>
+          <span>Privacy</span>
+          <span>Terms</span>
           <span>English (EU)</span>
-          <span>€ EUR</span>
+          <CurrencySelect className="currency-select--footer" drop="up" />
         </div>
       </div>
     </footer>

@@ -1,6 +1,7 @@
-import type { Stay, ResultsParams, StyleId, AmenityId, BookingTag } from './types'
+import type { Stay, ResultsParams, StyleId, AmenityId, BookingTag, AccessId, Currency } from './types'
 import { STAYS } from './stays.data'
 import { STYLE_LABELS } from './styles'
+import { priceInCurrency, CURRENCY_SYMBOL, convert } from './currency'
 
 export { STAYS }
 export type { Stay }
@@ -16,6 +17,29 @@ function shuffle<T>(arr: T[]): T[] {
     ;[a[i], a[j]] = [a[j], a[i]]
   }
   return a
+}
+
+function isStyleOnlySearch(params: ResultsParams): boolean {
+  return (
+    params.via === 'filters' &&
+    !!params.style &&
+    !params.where &&
+    !params.area &&
+    !params.checkin &&
+    !params.checkout &&
+    !params.guests &&
+    !params.infants &&
+    !params.pets &&
+    params.minPrice == null &&
+    params.maxPrice == null &&
+    (!params.wifi || params.wifi === 'any') &&
+    (!params.reviews || params.reviews === 'any') &&
+    (!params.rating || params.rating === 'any') &&
+    !params.amenities?.length &&
+    !params.booking?.length &&
+    !params.access?.length &&
+    !params.tags?.length
+  )
 }
 
 /* ------- params parsing ------- */
@@ -44,13 +68,17 @@ export function parseResultsParams(sp: URLSearchParams): ResultsParams {
     guests: num('guests'),
     infants: num('infants'),
     pets: num('pets'),
-    maxPrice: num('price'),
+    minPrice: num('priceMin'), // USD (canonical)
+    maxPrice: num('price'), // USD (canonical)
     style: (sp.get('style') as StyleId) ?? undefined,
+    styleSuggest: sp.get('styleSuggest') ?? undefined,
     wifi: sp.get('wifi') ?? undefined,
     reviews: sp.get('reviews') ?? undefined,
     rating: sp.get('rating') ?? undefined,
     amenities: list('amenities') as AmenityId[] | undefined,
     booking: list('booking') as BookingTag[] | undefined,
+    access: list('access') as AccessId[] | undefined,
+    tags: list('tags'),
     q: sp.get('q') ?? undefined,
     mood: sp.get('mood') ?? undefined,
   }
@@ -77,6 +105,10 @@ export function pickStays(params: ResultsParams): Stay[] {
   //    even if it means returning fewer than five.
   pool = pool.filter((s) => satisfiesHard(s, params))
 
+  // A plain style click is exploratory: show five varied stays within that
+  // aesthetic instead of always leading with the same highest-rated cards.
+  if (isStyleOnlySearch(params)) return shuffle(pool).slice(0, 5)
+
   // 3. Ranking. Style match floats up; then, when the user gave a budget or a
   //    party size, the cheapest and tightest-fitting stays lead; then rating.
   pool.sort((a, b) => {
@@ -84,8 +116,11 @@ export function pickStays(params: ResultsParams): Stay[] {
       const d = (b.style === params.style ? 1 : 0) - (a.style === params.style ? 1 : 0)
       if (d) return d
     }
-    if (params.maxPrice && a.priceValue !== b.priceValue) return a.priceValue - b.priceValue
-    if (params.guests && a.maxGuests !== b.maxGuests) return a.maxGuests - b.maxGuests
+    if (params.minPrice != null || params.maxPrice != null) {
+      const pa = priceInCurrency(a, 'USD')
+      const pb = priceInCurrency(b, 'USD')
+      if (pa !== pb) return pa - pb
+    }
     return b.rating - a.rating
   })
 
@@ -180,15 +215,29 @@ export function isAvailable(stay: Stay, checkin?: string, checkout?: string): bo
 // Hard constraints — dates, location, guests, budget, and the advanced filters.
 // A stay that fails any of these is excluded outright.
 function satisfiesHard(s: Stay, p: ResultsParams): boolean {
-  if (!isAvailable(s, p.checkin, p.checkout)) return false
+  // Explicit style picks (filter card / chat) are strict; mood tiles match on
+  // setting/climate via the mood tag (so "wintry" returns cold-climate stays,
+  // not industrial lofts in warm places).
+  if (p.style && p.via !== 'mood' && s.style !== p.style) return false
+  if (p.mood && !s.moods?.includes(p.mood)) return false
+  // The When/date filter is intentionally NOT applied — selected dates show in the
+  // recap but never exclude a stay. (Re-enable: `if (!isAvailable(s, p.checkin, p.checkout)) return false`.)
   if (p.area && !s.loc.toLowerCase().includes(p.area.toLowerCase())) return false
-  if (p.guests && s.maxGuests < p.guests) return false
-  if (p.maxPrice && s.priceValue > p.maxPrice) return false
+  // Guests is NOT a filter — every stay flexes to the requested party size, and
+  // the requested number is shown on the card (see StayCard). So it never empties
+  // the results.
+  if (p.minPrice != null || p.maxPrice != null) {
+    const price = priceInCurrency(s, 'USD') // bounds are canonical USD
+    if (p.minPrice != null && price < p.minPrice) return false
+    if (p.maxPrice != null && price > p.maxPrice) return false
+  }
   if (p.wifi && p.wifi !== 'any' && s.wifiSpeed < Number(p.wifi)) return false
   if (p.reviews && p.reviews !== 'any' && s.reviews < Number(p.reviews)) return false
   if (p.rating && p.rating !== 'any' && s.rating < Number(p.rating)) return false
   if (p.amenities?.length && !p.amenities.every((a) => s.amenities.includes(a))) return false
   if (p.booking?.length && !p.booking.every((b) => s.booking.includes(b))) return false
+  if (p.access?.length && !p.access.every((a) => s.access?.includes(a))) return false
+  if (p.tags?.length && !p.tags.every((t) => s.tags?.includes(t))) return false
   return true
 }
 
@@ -216,7 +265,7 @@ export function formatDateRange(checkin: string, checkout: string): string {
   return `${startDay} ${startMonth} - ${endDay} ${endMonth}`
 }
 
-export function buildContextLine(params: ResultsParams): string {
+export function buildContextLine(params: ResultsParams, currency: Currency = 'USD'): string {
   if (params.via === 'chat' || params.via === 'mood') {
     return params.q ?? ''
   }
@@ -238,12 +287,15 @@ export function buildContextLine(params: ResultsParams): string {
   if (params.style) parts.push(STYLE_LABELS[params.style] + ' stays')
 
   const adv: string[] = []
-  if (params.maxPrice) {
-    const sym =
-      params.where && params.where !== 'flexible'
-        ? cheapestInCity(params.where)?.priceDisplay.match(/^[^\d]+/)?.[0] ?? '$'
-        : '$'
-    adv.push(`under ${sym}${params.maxPrice}/night`)
+  const sym = CURRENCY_SYMBOL[currency]
+  // Bounds are stored as USD; show them in the active display currency.
+  const disp = (usd: number) => Math.round(convert(usd, 'USD', currency)).toLocaleString('en-US')
+  if (params.minPrice != null && params.maxPrice != null) {
+    adv.push(`${sym}${disp(params.minPrice)}–${sym}${disp(params.maxPrice)}/night`)
+  } else if (params.minPrice != null) {
+    adv.push(`from ${sym}${disp(params.minPrice)}/night`)
+  } else if (params.maxPrice != null) {
+    adv.push(`under ${sym}${disp(params.maxPrice)}/night`)
   }
   if (params.wifi && params.wifi !== 'any') adv.push(params.wifi + '+ Mbps Wi-Fi')
   if (params.booking?.includes('cancellation')) adv.push('free cancellation')
