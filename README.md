@@ -2,7 +2,7 @@
 
 > An AI-powered stay finder that returns **five taste-matched places to stay** — not hundreds to sift through. Search with filters, plain-English chat, or by browsing interior styles and moods.
 
-**Live demo →** _add your Vercel URL here after deploying_
+**Live demo → [ada-booking-sophia.vercel.app](https://ada-booking-sophia.vercel.app/)**
 
 Ada is a front-end portfolio piece: a polished, clickable prototype of an AI accommodation meta-search (the idea: it scans Airbnb, Booking, Vrbo and others and hands back a short, curated shortlist instead of endless results). I designed the experience and directed AI tooling to build it as a real React app, keeping the product and design judgment for myself.
 
