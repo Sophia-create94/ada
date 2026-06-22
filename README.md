@@ -78,9 +78,9 @@ public/assets/      # stay photos (organised by style) and mood images
 scripts/            # asset tooling (Pexels fetch, mood manifest, reconcile)
 ```
 
-## ☁️ Deployment
+## Deployment
 
-Hosted on **Vercel** — import the repo, framework preset **Vite** (build `npm run build`, output `dist`). [`vercel.json`](vercel.json) rewrites all routes to `/index.html`, so `/results` loads and refreshes without a 404. Pushes to `main` deploy automatically.
+Hosted on Vercel.
 
 ---
 
