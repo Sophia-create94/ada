@@ -51,6 +51,9 @@ body {
   line-height: 1.5;
   min-height: 100vh;
 }
+/* Embedded in a device-frame mockup (set from main.tsx): a top safe-area inset
+   so the header clears the notch, while content still scrolls to the top edge. */
+body.in-frame { padding-top: 30px; }
 
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
 a { color: inherit; text-decoration: none; }
