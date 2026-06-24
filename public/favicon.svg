@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Ada">
-  <!-- Gold house mark with the centered "a" — Ada's brand monogram. -->
-  <path d="M16 2.5 L28.5 12 L28.5 28 Q28.5 31 25.5 31 L6.5 31 Q3.5 31 3.5 28 L3.5 12 Z" fill="#B8862D"/>
-  <text x="16" y="24.5" text-anchor="middle"
+  <!-- Gold house mark with the centered "a" — Ada's brand monogram, sized to fill the icon. -->
+  <path d="M16 1.5 L30 12 L30 28 Q30 31 27 31 L5 31 Q2 31 2 28 L2 12 Z" fill="#B8862D"/>
+  <text x="16" y="26" text-anchor="middle"
         font-family="system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
-        font-weight="600" font-size="16" fill="#FBF5EE">a</text>
+        font-weight="600" font-size="21" fill="#FBF5EE">a</text>
 </svg>
