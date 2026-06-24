@@ -261,7 +261,7 @@ export default function Results() {
   }
 
   useEffect(() => {
-    document.title = 'Your stays · Ada'
+    document.title = 'Ada | Your stays'
     window.scrollTo(0, 0)
   }, [search])
 
