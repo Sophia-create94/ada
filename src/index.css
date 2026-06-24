@@ -1884,3 +1884,19 @@ img { max-width: 100%; display: block; }
   transition: background 0.15s ease, transform 0.15s ease;
 }
 .style-suggest-btn:hover { background: var(--accent-dark); transform: translateY(-1px); }
+
+/* ============================================================
+ * iOS: stop Safari auto-zooming on input focus.
+ * Mobile Safari zooms in whenever a focused text field is under
+ * 16px. These three entry fields are 13-14px by design on desktop;
+ * on touch devices bump them to 16px so tapping them no longer
+ * zooms the page (keeps pinch-zoom, unlike the viewport hack).
+ * ========================================================== */
+@media (hover: none) and (pointer: coarse) {
+  .ai-input,
+  .filter-value-input,
+  .adv-price-input { font-size: 16px; }
+  /* Match every filter cell value (When / Who / Style) to the 16px Where input
+     above, so the whole filter row reads consistently on touch. */
+  .filter-cell .filter-value { font-size: 16px; }
+}
